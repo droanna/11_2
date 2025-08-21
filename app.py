@@ -22,7 +22,6 @@ class db:
     @staticmethod
     def transation_init():
         transactions = pd.DataFrame()
-        # p = os.path.join('db', 'transactions')
         src = r'db\transactions'
         for filename in os.listdir(src):
             transactions = pd.concat([transactions, pd.read_csv(os.path.join(src,filename),index_col=0)])
@@ -81,7 +80,7 @@ def render_content(tab):
     [Input('sales-range','start_date'),Input('sales-range','end_date')])
 def tab1_bar_sales(start_date,end_date):
 
-    truncated = df.merged[(df.merged['tran_date']>=start_date)&(df.merged['tran_date']<=end_date)]
+    truncated = trim_data_by_date(df.merged, start_date, end_date)
     grouped = truncated[truncated['total_amt']>0].groupby([pd.Grouper(key='tran_date',freq='M'),'Store_type'])['total_amt'].sum().round(2).unstack()
 
     traces = []
@@ -90,8 +89,7 @@ def tab1_bar_sales(start_date,end_date):
         hovertext=[f'{y/1e3:.2f}k' for y in grouped[col].values]))
 
     data = traces
-    fig = go.Figure(data=data,layout=go.Layout(title='Przychody',barmode='stack',legend=dict(x=0,y=-0.5)))
-
+    fig = go.Figure(data=data,layout=go.Layout(title='Przychody',barmode='stack',legend=dict(x=0,y=-0.5), yaxis_title='Przychód całkowity', xaxis_title='Data'))
     return fig
 
 
@@ -99,7 +97,7 @@ def tab1_bar_sales(start_date,end_date):
             [Input('sales-range','start_date'),Input('sales-range','end_date')])
 def tab1_choropleth_sales(start_date,end_date):
 
-    truncated = df.merged[(df.merged['tran_date']>=start_date)&(df.merged['tran_date']<=end_date)]
+    truncated = trim_data_by_date(df.merged, start_date, end_date)
     grouped = truncated[truncated['total_amt']>0].groupby('country')['total_amt'].sum().round(2)
 
     trace0 = go.Choropleth(colorscale='Viridis',reversescale=True,
@@ -110,6 +108,11 @@ def tab1_choropleth_sales(start_date,end_date):
     fig.update_layout(height=400)
 
     return fig
+
+
+def trim_data_by_date(df, start_date, end_date):
+    truncated = df[(df['tran_date']>=start_date)&(df['tran_date']<=end_date)]
+    return truncated
 
 
 ## tab2 callbacks
@@ -134,8 +137,7 @@ def tab2_barh_prod_subcat(chosen_cat):
             [Input('store-type-range','start_date'),Input('store-type-range','end_date')])
 def tab3_store_type(start_date,end_date):
 
-    df_merged_range = df.merged[(df.merged['tran_date']>=start_date)&(df.merged['tran_date']<=end_date)]
-    store_type_data = tab3.prepare_data_store_type(df_merged_range)
+    store_type_data = tab3.prepare_data_store_type(trim_data_by_date(df.merged, start_date, end_date))
 
     trace0 = go.Heatmap(x=store_type_data['weekday'],
                          y=store_type_data['Store_type'],
@@ -143,20 +145,18 @@ def tab3_store_type(start_date,end_date):
 
     data = [trace0]
     fig = go.Figure(data=data,layout=go.Layout())
-    fig.update_layout(height=400)
+    fig.update_layout(height=400, title='Całkowita suma sprzedaży')
     return fig
 
 
 @app.callback(Output('pie-customer-age','figure'),
               Input('age-slider','value'))
 def tab3_customer_age(value):
-    customers_df = df.merged
-    customers_df = tab3.prepare_date_customers(customers_df)
-    customers_df = customers_df[(customers_df['age'] >= value[0]) & (customers_df['age'] <= value[1])]
-    customers_df = customers_df.groupby(['Store_type'])['total_amt'].sum().reset_index()
 
+    customers_df = tab3.prepare_data_customers(df.merged, value)
+   
     fig = go.Figure(data=[go.Pie(labels=customers_df['Store_type'],values=customers_df['total_amt'])])
-    fig.update_layout(height=400)
+    fig.update_layout(height=400, title='Udział kanałów sprzedaży w całkowitej sumie sprzedaży')
     return fig
 
 
